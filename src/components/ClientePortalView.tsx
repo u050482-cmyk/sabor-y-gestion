@@ -71,10 +71,24 @@ export default function ClientePortalView({
   const [searchWord, setSearchWord] = useState('');
 
   // Payment simulated preferences
-  const [paymentMethod, setPaymentMethod] = useState<'efectivo' | 'tarjeta'>('tarjeta');
+  const [paymentMethod, setPaymentMethod] = useState<'efectivo' | 'tarjeta' | 'movil'>('tarjeta');
   const [tipPercentage, setTipPercentage] = useState<number>(10);
   const [cashGiven, setCashGiven] = useState<string>('600');
   const [paymentDone, setPaymentDone] = useState(false);
+  const [lastClosedOrder, setLastClosedOrder] = useState<{
+    id: string;
+    tableNumber: number;
+    customerName: string;
+    items: { name: string; quantity: number; price: number; notes?: string }[];
+    subtotal: number;
+    tipAmount: number;
+    total: number;
+    paymentMethod: 'efectivo' | 'tarjeta';
+    receivedAmount?: number;
+    changeAmount?: number;
+    date: string;
+    waiterName: string;
+  } | null>(null);
 
   // Filtered menu
   const filteredMenuItems = menu.filter(item => {
@@ -143,19 +157,45 @@ export default function ClientePortalView({
     const cash = parseFloat(cashGiven) || tot;
     const change = Math.max(0, cash - tot);
 
+    const assignedWaiter = staff.find(s => s.id === currentOrder.waiterId) || staff[1];
+
+    const snapshotItems = currentOrder.items.map(it => {
+      const dish = menu.find(m => m.id === it.menuItemId);
+      return {
+        name: dish ? dish.name : 'Platillo',
+        quantity: it.quantity,
+        price: dish ? dish.price : 0,
+        notes: it.notes
+      };
+    });
+
+    const finalBackendMethod = (paymentMethod === 'movil' || paymentMethod === 'tarjeta') ? 'tarjeta' : 'efectivo';
+
+    setLastClosedOrder({
+      id: currentOrder.id,
+      tableNumber: activeTable?.number || 0,
+      customerName: currentOrder.customerName,
+      items: snapshotItems,
+      subtotal: sub,
+      tipAmount: tip,
+      total: tot,
+      paymentMethod: finalBackendMethod,
+      receivedAmount: finalBackendMethod === 'efectivo' ? cash : undefined,
+      changeAmount: finalBackendMethod === 'efectivo' ? change : undefined,
+      date: new Date().toISOString(),
+      waiterName: assignedWaiter ? assignedWaiter.name : 'Mesero General'
+    });
+
     onCloseOrder(
       currentOrder.id,
-      paymentMethod,
+      finalBackendMethod,
       tipPercentage,
-      paymentMethod === 'efectivo' ? cash : undefined,
-      paymentMethod === 'efectivo' ? change : undefined
+      finalBackendMethod === 'efectivo' ? cash : undefined,
+      finalBackendMethod === 'efectivo' ? change : undefined
     );
 
     setPaymentDone(true);
     showToast('🎉 ¡Mesa liquidada con éxito! Muchísimas gracias por visitarnos.');
-    setTimeout(() => {
-      setPaymentDone(false);
-    }, 4500);
   };
 
   // CART LOGIC HELPER CODES
@@ -216,8 +256,13 @@ export default function ClientePortalView({
       onAddItemsToOrder(currentOrder.id, cartItems);
       showToast(`🔥 ¡Adiciones enviadas! Tus platillos ya están en la fila de los Chefs.`);
     } else {
-      // This is a brand new order for the table!
-      onOpenOrder(sessionTableId, `${currentUser.name} (Auto)`, 'st-2', cartItems);
+      // This is a brand new order for the table! Find first active waiter in staff list dynamically
+      const activeWaiterMatch = staff.find(s => s.role === 'waiter' && s.status === 'active') || 
+                                staff.find(s => s.role === 'waiter') || 
+                                staff[1];
+      const targetWaiterId = activeWaiterMatch ? activeWaiterMatch.id : 'st-2';
+
+      onOpenOrder(sessionTableId, `${currentUser.name} (Auto)`, targetWaiterId, cartItems);
       showToast(`✨ ¡Comanda Iniciada! Hemos abierto tu orden en la Mesa #${activeTable?.number}.`);
     }
 
@@ -463,17 +508,24 @@ export default function ClientePortalView({
                       <div className="flex gap-2">
                         <button
                           onClick={() => setActivePanel('menu')}
-                          className="flex-1 py-2 text-xs font-bold border border-[#E5E0D8] hover:bg-[#FAF8F5] rounded-xl text-[#2E2A25] transition"
+                          className="flex-1 py-1.5 text-xs font-bold border border-[#E5E0D8] hover:bg-[#FAF8F5] rounded-xl text-[#2E2A25] transition cursor-pointer"
                         >
                           ➕ Agregar platillos
                         </button>
                         <button
                           onClick={() => setActivePanel('pago')}
-                          className="flex-1 py-2 text-xs font-bold bg-[#2E4A3F] hover:bg-[#1E2F25] text-white rounded-xl transition"
+                          className="flex-1 py-1.5 text-xs font-bold bg-[#2E4A3F] hover:bg-[#1E2F25] text-white rounded-xl transition cursor-pointer"
                         >
                           💸 Pagar cuenta
                         </button>
                       </div>
+
+                      <button
+                        onClick={handleRequestBillSimulate}
+                        className="w-full py-2 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-slate-900 font-extrabold rounded-xl text-xs transition flex items-center justify-center gap-1 shadow-sm cursor-pointer"
+                      >
+                        🛎️ Llamar al Mesero (Pedir la Cuenta)
+                      </button>
                     </div>
                   ) : (
                     <div className="space-y-4 text-center py-6 text-[#2E2A25]">
@@ -681,19 +733,161 @@ export default function ClientePortalView({
               <p className="text-xs text-[#605850]">Calcula tu cuenta, selecciona propina voluntaria, y liquida tu mesa simulando el cobro en terminal.</p>
             </div>
 
-            {currentOrder ? (
-              <div>
-                {paymentDone ? (
-                  <div className="text-center py-12 space-y-4 max-w-sm mx-auto border border-emerald-200 bg-emerald-50 rounded-3xl p-6">
-                    <div className="mx-auto w-12 h-12 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-700">
-                      <CheckCircle size={24} />
+            {paymentDone && lastClosedOrder ? (
+              <div className="space-y-6 max-w-md mx-auto animate-fadeIn">
+                
+                {/* Success announcement badge banner */}
+                <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-4 flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-700 shrink-0">
+                    <CheckCircle size={16} />
+                  </div>
+                  <div className="space-y-0.5 text-left">
+                    <h4 className="text-xs font-bold text-[#1E2F25]">¡Pago de Cuenta Realizado!</h4>
+                    <p className="text-3xs text-emerald-800">Se ha generado tu recibo oficial en pantalla para control administrativo.</p>
+                  </div>
+                </div>
+
+                {/* High-fidelity thermal receipt container */}
+                <div className="relative bg-white border-2 border-[#CAD9D0] rounded-xl p-6 shadow-md font-mono text-[#33302C] text-xs space-y-4 overflow-hidden select-text text-left">
+                  <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-red-200 via-yellow-200 to-green-200"></div>
+
+                  {/* Receipt Header logo */}
+                  <div className="text-center space-y-1 border-b border-[#E5E0D8] pb-3">
+                    <span className="text-sm font-black tracking-widest text-[#2E4A3F] uppercase font-serif">SABOR & GESTIÓN</span>
+                    <span className="block text-[10px] text-gray-400 font-semibold leading-none">AUTO-PAGO CLIENTE</span>
+                    <span className="block text-[8px] text-[#605850] leading-snug mt-1">
+                      Av. Alfonso Reyes 204, Cuauhtémoc, México DF<br/>
+                      RFC: SGE-260520-DF8 • TEL: 55-REST-SABOR
+                    </span>
+                  </div>
+
+                  {/* Receipt metadata */}
+                  <div className="text-3xs text-[#5A524A] space-y-1 block border-b border-dashed border-[#CAD9D0]/50 pb-2 leading-relaxed text-left">
+                    <div className="flex justify-between">
+                      <span>TRANSACCIÓN ID:</span>
+                      <span className="font-bold">CLI-TX-{lastClosedOrder.id.toUpperCase()}-{Date.now().toString().slice(-4)}</span>
                     </div>
-                    <div>
-                      <h3 className="font-serif font-bold text-[#2E2A25] text-base">¡Pago Procesado de Forma Exitosa!</h3>
-                      <p className="text-3xs text-emerald-800 mt-1">La mesa ha sido desocupada y se encuentra libre. ¡Muchísimas gracias por visitarnos!</p>
+                    <div className="flex justify-between">
+                      <span>FECHA Y HORA:</span>
+                      <span className="font-bold">{new Date(lastClosedOrder.date).toLocaleDateString()} {new Date(lastClosedOrder.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>MESA CUBIERTA:</span>
+                      <span className="font-bold">Mesa #{lastClosedOrder.tableNumber}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>MESERO:</span>
+                      <span className="font-bold">{lastClosedOrder.waiterName}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>CLIENTE-SERVICIO:</span>
+                      <span className="font-bold uppercase">{lastClosedOrder.customerName}</span>
                     </div>
                   </div>
-                ) : (
+
+                  {/* Ticket Items */}
+                  <div className="space-y-1.5 text-left">
+                    <div className="flex justify-between text-4xs font-black uppercase text-[#605850] border-b border-[#E5E0D8] pb-1 font-sans">
+                      <span>DESCRIPCIÓN COMIDAS</span>
+                      <span>IMPORTE</span>
+                    </div>
+                    
+                    <div className="space-y-1 text-[#2E2A25] text-3xs">
+                      {lastClosedOrder.items.map((oItem, iIdx) => (
+                        <div key={iIdx} className="flex justify-between leading-snug">
+                          <span className="max-w-[75%] font-sans">
+                            {oItem.quantity}x <span className="font-semibold text-[#2E2A25]">{oItem.name}</span>
+                            {oItem.notes && <span className="block text-4xs text-[#AE593E] font-medium font-sans">✏️ "{oItem.notes}"</span>}
+                          </span>
+                          <span className="font-mono font-bold">${(oItem.price * oItem.quantity).toFixed(1)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Math Summary */}
+                  <div className="border-t border-dashed border-[#CAD9D0]/60 pt-3 text-3xs text-[#443E38] space-y-1.5 font-bold text-left">
+                    <div className="flex justify-between font-normal text-gray-500">
+                      <span>SUBTOTAL CONSUMO:</span>
+                      <span>${lastClosedOrder.subtotal.toFixed(1)} MXN</span>
+                    </div>
+                    <div className="flex justify-between font-normal text-gray-500">
+                      <span>IVA TRASLADADO (16%):</span>
+                      <span>${(lastClosedOrder.subtotal * 0.16).toFixed(1)} MXN</span>
+                    </div>
+                    <div className="flex justify-between font-normal text-gray-500">
+                      <span>PROPINA VOLUNTARIA:</span>
+                      <span>+${lastClosedOrder.tipAmount.toFixed(1)} MXN</span>
+                    </div>
+                    
+                    <div className="flex justify-between text-xs font-black border-t-2 border-[#2E2A25] pt-1.5 text-[#2E2A25] font-serif">
+                      <span>TOTAL PAGADO:</span>
+                      <span>${lastClosedOrder.total.toFixed(1)} MXN</span>
+                    </div>
+                  </div>
+
+                  {/* Payment detail check */}
+                  <div className="bg-[#EFECE6]/45 p-2 rounded-lg text-4xs text-gray-600 block space-y-1 border border-[#E5E0D8]/45 text-left">
+                    <div className="flex justify-between">
+                      <span>MÉTODO DE PAGO:</span>
+                      <span className="font-bold">{lastClosedOrder.paymentMethod === 'efectivo' ? '💵 EFECTIVO' : '💳 TARJETA'}</span>
+                    </div>
+                    {lastClosedOrder.paymentMethod === 'efectivo' ? (
+                      <>
+                        <div className="flex justify-between">
+                          <span>EFECTIVO ENTREGADO:</span>
+                          <span className="font-bold">${(lastClosedOrder.receivedAmount || lastClosedOrder.total).toFixed(1)} MXN</span>
+                        </div>
+                        <div className="flex justify-between text-indigo-700 font-bold font-sans text-3xs">
+                          <span>CAMBIO INDIVIDUAL DEVUELTO:</span>
+                          <span>${(lastClosedOrder.changeAmount || 0).toFixed(1)} MXN</span>
+                        </div>
+                      </>
+                    ) : (
+                      <div className="flex justify-between text-emerald-700 font-bold">
+                        <span>ESTADO TRANSACCIÓN:</span>
+                        <span>APROBADO DE CLIENTE EN COLA</span>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Receipt Footer design */}
+                  <div className="text-center text-[8px] text-gray-500 border-t border-[#E5E0D8] pt-2.5 leading-normal font-sans font-medium">
+                    <p className="font-bold text-gray-700 font-serif text-[9px]">¡MUCHAS GRACIAS POR TU PREFERENCIA!</p>
+                    <p className="text-gray-400 mt-0.5">Sabor & Gestión - El mejor sazón en un click</p>
+                    <div className="pt-2 text-center text-xs tracking-widest text-[#2E2A25]/75 select-none font-mono font-bold">
+                      ||||  || | | ||| ||  ||| | ||
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex flex-col gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      window.print();
+                    }}
+                    className="py-2.5 bg-white text-[#2E4A3F] border border-[#CAD9D0] font-extrabold rounded-xl hover:bg-[#FAF8F5] transition text-3xs uppercase tracking-wider flex items-center justify-center gap-1 cursor-pointer"
+                  >
+                    🖨️ Simular Imprimir / Descargar Recibo PDF
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setPaymentDone(false);
+                      setLastClosedOrder(null);
+                      setActivePanel('mesa');
+                    }}
+                    className="py-3 bg-[#2E4A3F] hover:bg-[#1E2F25] text-white text-xs font-bold rounded-xl transition shadow flex items-center justify-center gap-1 cursor-pointer"
+                  >
+                    ✅ Entendido: Desocupar Mesa y Finalizar
+                  </button>
+                </div>
+
+              </div>
+            ) : currentOrder ? (
+              <div>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-start">
                     
                     {/* Items detailing list */}
@@ -756,27 +950,81 @@ export default function ClientePortalView({
                       {/* Payment method */}
                       <div className="space-y-2">
                         <label className="block text-3xs font-extrabold text-[#605850] uppercase tracking-wider">Selecciona Método de Pago</label>
-                        <div className="flex gap-2">
+                        <div className="grid grid-cols-3 gap-1.5">
                           <button
                             type="button"
                             onClick={() => setPaymentMethod('tarjeta')}
-                            className={`flex-1 py-2.5 text-xs font-bold rounded-xl transition flex items-center justify-center gap-1 border ${
+                            className={`py-2 text-xs font-bold rounded-xl transition flex items-center justify-center gap-1 border cursor-pointer ${
                               paymentMethod === 'tarjeta' ? 'bg-[#2E4A3F] text-white border-transparent' : 'bg-[#FAF8F5] text-[#2E2A25] border-[#E5E0D8] hover:bg-[#EFECE6]'
                             }`}
                           >
-                            <CreditCard size={14} /> Tarjeta / Celular
+                            <CreditCard size={12} /> Tarjeta
                           </button>
                           <button
                             type="button"
                             onClick={() => setPaymentMethod('efectivo')}
-                            className={`flex-1 py-2.5 text-xs font-bold rounded-xl transition flex items-center justify-center gap-1 border ${
+                            className={`py-2 text-xs font-bold rounded-xl transition flex items-center justify-center gap-1 border cursor-pointer ${
                               paymentMethod === 'efectivo' ? 'bg-[#2E4A3F] text-white border-transparent' : 'bg-[#FAF8F5] text-[#2E2A25] border-[#E5E0D8] hover:bg-[#EFECE6]'
                             }`}
                           >
-                            <DollarSign size={14} /> Dinero Efectivo
+                            <DollarSign size={12} /> Efectivo
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setPaymentMethod('movil')}
+                            className={`py-2 text-xs font-bold rounded-xl transition flex items-center justify-center gap-1 border cursor-pointer ${
+                              paymentMethod === 'movil' ? 'bg-[#2E4A3F] text-white border-transparent' : 'bg-[#FAF8F5] text-[#2E2A25] border-[#E5E0D8] hover:bg-[#EFECE6]'
+                            }`}
+                          >
+                            📱 Pago Móvil
                           </button>
                         </div>
                       </div>
+
+                      {/* Explicit block for mobile payment details */}
+                      {paymentMethod === 'movil' && (
+                        <div className="bg-[#EBF2EE]/40 border border-[#CAD9D0] rounded-2xl p-4 space-y-4 animate-fadeIn text-center">
+                          <span className="inline-block px-2.5 py-0.5 bg-[#2E4A3F] text-white font-mono font-extrabold text-[8px] uppercase tracking-wider rounded">
+                            ⚡ CoDi® SPEI / NFC Móvil Integrado
+                          </span>
+                          
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-center">
+                            
+                            {/* QR Scan Section */}
+                            <div className="space-y-1.5 p-2.5 bg-white border border-[#E5E0D8] rounded-xl flex flex-col items-center">
+                              <span className="block text-[8px] font-extrabold text-[#605850] uppercase tracking-widest text-[#2E4A3F]">Escanear con Banco</span>
+                              
+                              {/* Simulated QR block layout */}
+                              <div className="w-16 h-16 bg-slate-900 rounded p-1 flex flex-wrap items-center justify-center gap-0.5 shadow">
+                                {Array.from({ length: 49 }).map((_, i) => (
+                                  <div
+                                    key={i}
+                                    className={`w-1.5 h-1.5 rounded-xs ${
+                                      (i < 6 && i % 2 === 0) || (i > 40 && i % 3 === 0) || (i % 5 === 1) || (i === 11 || i === 22 || i === 29 || i === 34)
+                                        ? 'bg-transparent'
+                                        : 'bg-[#A3E635]'
+                                    }`}
+                                  ></div>
+                                ))}
+                              </div>
+                              <span className="text-[9px] text-[#605850] font-mono font-semibold">REF: MESA-{activeTable?.number}</span>
+                            </div>
+
+                            {/* NFC Touch Section */}
+                            <div className="space-y-2 p-2 flex flex-col justify-center items-center">
+                              <div className="w-10 h-10 rounded-full bg-emerald-100 border border-emerald-350 text-[#2E4A3F] flex items-center justify-center font-bold animate-pulse text-xs">
+                                📡
+                              </div>
+                              <span className="block text-[8px] font-black text-[#2E4A3F] uppercase tracking-widest">NFC Contactless Ready</span>
+                              <p className="text-[10px] text-gray-500 leading-tight">Acerca tu móvil al lector táctil de mesa para transferir tarjetas bancarias digitales.</p>
+                            </div>
+
+                          </div>
+                          <p className="text-[9px] text-[#AE593E] font-bold italic">
+                            💡 Autorización instantánea. Presiona "Simular Pago de Cuenta" abajo para liquidar fondos de inmediato.
+                          </p>
+                        </div>
+                      )}
 
                       {/* Explicit block for cash parameters */}
                       {paymentMethod === 'efectivo' && (
@@ -814,7 +1062,6 @@ export default function ClientePortalView({
                     </form>
 
                   </div>
-                )}
               </div>
             ) : (
               <div className="text-center py-12 text-[#605850] text-xs max-w-sm mx-auto space-y-2.5">

@@ -24,10 +24,14 @@ export default function App() {
     return backup ? JSON.parse(backup) : null;
   });
 
-  // Forzar pestaña 'comandas' para el rol de mesero (crear pedidos y cobrar)
+  // Forzar pestañas por rol conveniente al iniciar sesión
   useEffect(() => {
-    if (currentUser && currentUser.role === 'waiter') {
-      setActiveTab('comandas');
+    if (currentUser) {
+      if (currentUser.role === 'waiter') {
+        setActiveTab('comandas');
+      } else if (currentUser.role === 'chef') {
+        setActiveTab('cocina');
+      }
     }
   }, [currentUser]);
 
@@ -352,7 +356,7 @@ export default function App() {
   const earningsToday = sales.reduce((sum, s) => sum + s.total, 0);
 
   if (!currentUser) {
-    return <LoginView staff={staff} onLoginSuccess={(user) => setCurrentUser(user)} />;
+    return <LoginView staff={staff} tables={tables} onLoginSuccess={(user) => setCurrentUser(user)} />;
   }
 
   return (
@@ -545,6 +549,7 @@ export default function App() {
                 menu={menu}
                 staff={staff}
                 orders={orders}
+                sales={sales}
                 onOpenOrder={handleOpenOrder}
                 onAddItemsToOrder={handleAddItemsToOrder}
                 onUpdateItemStatus={handleUpdateItemStatus}

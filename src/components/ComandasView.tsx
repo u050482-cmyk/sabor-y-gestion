@@ -4,7 +4,7 @@ import {
   Trash2, User, DollarSign, CreditCard, ChevronRight, X, FileText, Sparkles
 } from 'lucide-react';
 import { 
-  RestaurantTable, MenuItem, StaffMember, Order, OrderItem, ItemStatus 
+  RestaurantTable, MenuItem, StaffMember, Order, OrderItem, ItemStatus, Sale 
 } from '../types';
 
 interface ComandasViewProps {
@@ -12,6 +12,7 @@ interface ComandasViewProps {
   menu: MenuItem[];
   staff: StaffMember[];
   orders: Order[];
+  sales?: Sale[];
   onOpenOrder: (tableId: string, customerName: string, waiterId: string, items: { menuItemId: string; quantity: number; notes: string }[]) => void;
   onAddItemsToOrder: (orderId: string, items: { menuItemId: string; quantity: number; notes: string }[]) => void;
   onUpdateItemStatus: (orderId: string, itemId: string, newStatus: ItemStatus) => void;
@@ -26,6 +27,7 @@ export default function ComandasView({
   menu,
   staff,
   orders,
+  sales = [],
   onOpenOrder,
   onAddItemsToOrder,
   onUpdateItemStatus,
@@ -70,6 +72,73 @@ export default function ComandasView({
   const [tipPercentage, setTipPercentage] = useState<number>(10);
   const [paymentMethod, setPaymentMethod] = useState<'efectivo' | 'tarjeta'>('efectivo');
   const [cashReceived, setCashReceived] = useState<string>('');
+
+  // Manual / physical direct tips tracking
+  const [manualTips, setManualTips] = useState<{ id: string; waiterName: string; amount: number; notes: string; date: string }[]>(() => {
+    const backup = localStorage.getItem('resto_manual_tips_v1');
+    return backup ? JSON.parse(backup) : [];
+  });
+
+  useEffect(() => {
+    localStorage.setItem('resto_manual_tips_v1', JSON.stringify(manualTips));
+  }, [manualTips]);
+
+  const [propinaInputMonto, setPropinaInputMonto] = useState('');
+  const [propinaInputNota, setPropinaInputNota] = useState('');
+  const [propinaSelectorWaiter, setPropinaSelectorWaiter] = useState(currentUser?.name || '');
+
+  // Synchronize propinaSelectorWaiter with currentUser if they are waiter
+  useEffect(() => {
+    if (currentUser && currentUser.role === 'waiter') {
+      setPropinaSelectorWaiter(currentUser.name);
+    }
+  }, [currentUser]);
+
+  // Calculate tips for current selected waiter
+  const activeWaiterForTips = currentUser?.role === 'waiter' 
+    ? currentUser.name 
+    : propinaSelectorWaiter;
+
+  // Digital tips from system sales
+  const waiterDigitalSales = sales ? sales.filter(s => s.waiterName === activeWaiterForTips) : [];
+  const totalDigitalTips = waiterDigitalSales.reduce((sum, s) => sum + (s.tipAmount || 0), 0);
+
+  // Manual tips from the direct logs
+  const waiterManualTips = manualTips.filter(t => t.waiterName === activeWaiterForTips);
+  const totalManualTips = waiterManualTips.reduce((sum, t) => sum + t.amount, 0);
+
+  const grandTotalTips = totalDigitalTips + totalManualTips;
+
+  const handleAddManualTip = (e: React.FormEvent) => {
+    e.preventDefault();
+    const amt = parseFloat(propinaInputMonto);
+    if (isNaN(amt) || amt <= 0) return;
+
+    const newTip = {
+      id: `tip-${Date.now()}`,
+      waiterName: activeWaiterForTips || 'Mesero General',
+      amount: amt,
+      notes: propinaInputNota.trim() || 'Servicio directo / extra',
+      date: new Date().toISOString()
+    };
+
+    setManualTips(prev => [newTip, ...prev]);
+    setPropinaInputMonto('');
+    setPropinaInputNota('');
+  };
+
+  const handleClearManualTips = () => {
+    if (window.confirm('¿Seguro que deseas reiniciar tu historial de propinas físicas de hoy?')) {
+      if (currentUser?.role === 'waiter') {
+        // Clear only current waiter's tips
+        setManualTips(prev => prev.filter(t => t.waiterName !== currentUser.name));
+      } else if (activeWaiterForTips) {
+        setManualTips(prev => prev.filter(t => t.waiterName !== activeWaiterForTips));
+      } else {
+        setManualTips([]);
+      }
+    }
+  };
 
   const activeOrder = selectedTable?.currentOrderId 
     ? orders.find(o => o.id === selectedTable.currentOrderId) 
@@ -584,6 +653,152 @@ export default function ComandasView({
           <span className="text-3xs text-[#605850] bg-[#FAF8F5] border border-[#E5E0D8] rounded px-2.5 py-1">
             Requisitos: Para agregar pedidos, deba haber al menos un mesero activo
           </span>
+        </div>
+
+        {/* CONTADOR Y REGISTRO DE PROPINAS SECTION */}
+        <div className="bg-white p-5 rounded-2xl border border-[#E5E0D8] shadow-sm space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-[#EFECE6] pb-3">
+            <div>
+              <h3 className="text-base font-bold font-serif text-[#2E2A25] flex items-center gap-1.5">
+                💰 Contador y Control de Propinas
+              </h3>
+              <p className="text-xs text-[#605850]">Monitorea las propinas digitales de comensales y registra propinas físicas acumuladas en tu turno.</p>
+            </div>
+            
+            {/* Waiter Selection chooser */}
+            {currentUser?.role !== 'waiter' ? (
+              <div className="flex items-center gap-2">
+                <span className="text-3xs font-extrabold uppercase text-[#605850] tracking-wider whitespace-nowrap">Ver de:</span>
+                <select
+                  value={propinaSelectorWaiter}
+                  onChange={e => setPropinaSelectorWaiter(e.target.value)}
+                  className="text-xs border border-[#E5E0D8] rounded-lg px-2.5 py-1 bg-white text-[#2E2A25] focus:outline-none"
+                >
+                  <option value="">-- Seleccionar Mesero --</option>
+                  {staff.filter(s => s.role === 'waiter').map(w => (
+                    <option key={w.id} value={w.name}>{w.name}</option>
+                  ))}
+                </select>
+              </div>
+            ) : (
+              <span className="px-2.5 py-1 bg-[#EBF2EE] border border-[#CAD9D0] text-[#2F483A] text-xxs font-extrabold rounded-lg">
+                🏃‍♂️ Mesero: {currentUser.name}
+              </span>
+            )}
+          </div>
+
+          {activeWaiterForTips ? (
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              
+              {/* Tip Metrics Breakdown (2 cols) */}
+              <div className="md:col-span-2 space-y-3">
+                <div className="grid grid-cols-3 gap-2.5">
+                  <div className="bg-[#FAF8F5] border border-[#E5E0D8] rounded-xl p-3 text-center">
+                    <span className="block text-4xs uppercase font-extrabold text-[#605850] tracking-wider mb-1">💳 Terminal/Mesa</span>
+                    <span className="text-sm font-bold text-[#2E4A3F] font-mono">${totalDigitalTips.toLocaleString([], { minimumFractionDigits: 1, maximumFractionDigits: 1 })}</span>
+                    <p className="text-[9px] text-[#828f87] mt-0.5 leading-none">{waiterDigitalSales.length} comandas cobradas</p>
+                  </div>
+                  <div className="bg-[#FAF8F5] border border-[#E5E0D8] rounded-xl p-3 text-center">
+                    <span className="block text-4xs uppercase font-extrabold text-[#605850] tracking-wider mb-1">💵 Efectivo Extra</span>
+                    <span className="text-sm font-bold text-[#AE593E] font-mono">${totalManualTips.toLocaleString([], { minimumFractionDigits: 1, maximumFractionDigits: 1 })}</span>
+                    <p className="text-[9px] text-[#aa8e84] mt-0.5 leading-none">{waiterManualTips.length} registradas</p>
+                  </div>
+                  <div className="bg-[#FAF8F5] border-amber-300 bg-amber-50/45 rounded-xl p-3 text-center">
+                    <span className="block text-4xs uppercase font-extrabold text-amber-950 tracking-wider mb-1">👑 Total Turno</span>
+                    <span className="text-base font-black text-amber-900 font-mono">${grandTotalTips.toLocaleString([], { minimumFractionDigits: 1, maximumFractionDigits: 1 })}</span>
+                    <p className="text-[9px] text-amber-850 mt-0.5 leading-none font-bold">Acumulado total</p>
+                  </div>
+                </div>
+
+                {/* Sub-list of tips history */}
+                <div className="border border-[#E5E0D8] rounded-xl bg-[#FAF8F5] p-3 block">
+                  <div className="flex justify-between items-center border-b border-[#E5E0D8]/60 pb-1.5 mb-2">
+                    <span className="text-3xs uppercase font-extrabold tracking-wider text-[#2E2A25]">Registro de Propinas de {activeWaiterForTips}</span>
+                    {(waiterManualTips.length > 0 || waiterDigitalSales.length > 0) && (
+                      <button
+                        onClick={handleClearManualTips}
+                        className="text-[10px] text-[#AE593E] font-bold hover:underline cursor-pointer"
+                      >
+                        Reiniciar Registro
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="space-y-1.5 max-h-[140px] overflow-y-auto pr-1">
+                    {/* Render Digital Tips first */}
+                    {waiterDigitalSales.map(v => (
+                      <div key={v.id} className="flex justify-between items-center text-3xs border-b border-[#E5E0D8]/40 pb-1 last:border-0 last:pb-0">
+                        <span className="font-extrabold text-gray-500">
+                          🛡️ Sistema: Comanda #{v.orderId} (Mesa {v.tableNumber}) - {new Date(v.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        </span>
+                        <span className="font-bold text-[#2E4A3F]">+${(v.tipAmount || 0).toFixed(1)} MXN</span>
+                      </div>
+                    ))}
+
+                    {/* Render Manual Tips */}
+                    {waiterManualTips.map(t => (
+                      <div key={t.id} className="flex justify-between items-center text-3xs border-b border-[#E5E0D8]/40 pb-1 last:border-0 last:pb-0">
+                        <div className="leading-tight">
+                          <span className="font-black text-stone-700">✍️ Efectivo: {t.notes}</span>
+                          <span className="block text-[8px] text-gray-400">{new Date(t.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                        </div>
+                        <span className="font-bold text-[#AE593E]">+${t.amount.toFixed(1)} MXN</span>
+                      </div>
+                    ))}
+
+                    {waiterDigitalSales.length === 0 && waiterManualTips.length === 0 && (
+                      <p className="text-3xs text-center py-4 text-[#605850] italic">Aún no se registran propinas para este mesero en el turno actual.</p>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Form to submit manual/physical tips */}
+              <div className="bg-[#FAF8F5]/60 border border-[#E5E0D8] rounded-xl p-4 space-y-3">
+                <span className="text-3xs uppercase font-extrabold tracking-widest text-[#2E2A25] block border-b border-[#EFECE6] pb-1.5">Anotar Propina Extra (Efectivo)</span>
+                
+                <form onSubmit={handleAddManualTip} className="space-y-2.5">
+                  <div>
+                    <label className="block text-4xs font-extrabold text-[#605850] uppercase tracking-wider mb-0.5">Monto Recibido ($)</label>
+                    <div className="relative">
+                      <span className="absolute left-2.5 top-1.5 text-stone-500 text-xs font-mono">$</span>
+                      <input
+                        type="number"
+                        placeholder="0.00"
+                        value={propinaInputMonto}
+                        onChange={e => setPropinaInputMonto(e.target.value)}
+                        required
+                        className="bg-white border border-[#E5E0D8] rounded-lg px-2 py-1.5 pl-6 w-full text-xs font-mono text-[#2E2A25] focus:outline-none focus:ring-1 focus:ring-[#2E4A3F]"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-4xs font-extrabold text-[#605850] uppercase tracking-wider mb-0.5">Concepto / Notas de Mesa</label>
+                    <input
+                      type="text"
+                      placeholder="Ej. Mesa 3 en mano"
+                      value={propinaInputNota}
+                      onChange={e => setPropinaInputNota(e.target.value)}
+                      className="bg-white border border-[#E5E0D8] rounded-lg px-2 py-1.5 w-full text-xs text-[#2E2A25] focus:outline-none focus:ring-1 focus:ring-[#2E4A3F] placeholder:text-stone-400"
+                    />
+                  </div>
+
+                  <button
+                    type="submit"
+                    className="w-full py-2 bg-[#2E4A3F] hover:bg-[#1E2F25] text-white text-3xs uppercase tracking-wider font-extrabold rounded-lg transition cursor-pointer"
+                  >
+                    ➕ Registrar en Turno
+                  </button>
+                </form>
+              </div>
+
+            </div>
+          ) : (
+            <div className="p-4 text-center border-t border-dashed border-[#E5E0D8] text-xs text-[#605850] italic">
+              💡 Por favor selecciona un mesero de la lista descolgante para iniciar la gestión y cálculo.
+            </div>
+          )}
         </div>
       </div>
 

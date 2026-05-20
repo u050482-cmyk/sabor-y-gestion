@@ -1,4 +1,4 @@
-export type StaffRole = 'waiter' | 'chef' | 'cashier' | 'manager' | 'customer';
+export type StaffRole = 'waiter' | 'chef' | 'cashier' | 'manager' | 'customer' | 'receptionist';
 export type StaffStatus = 'active' | 'break' | 'inactive';
 
 export interface StaffMember {
@@ -34,6 +34,7 @@ export interface RestaurantTable {
   section?: 'salon' | 'terraza' | 'barra' | 'vip';
   posX?: number; // relative percentage X
   posY?: number; // relative percentage Y
+  menuDelivered?: boolean; // receptionist delivers the menu
 }
 
 export type ItemStatus = 'pendiente' | 'preparando' | 'listo' | 'entregado';
@@ -88,6 +89,7 @@ export const INITIAL_STAFF: StaffMember[] = [
   { id: 'st-6', name: 'Chef Valentina', role: 'chef', status: 'active', avatarColor: 'bg-rose-500', username: 'chef2', password: '123' },
   { id: 'st-7', name: 'Andrés López', role: 'cashier', status: 'active', avatarColor: 'bg-purple-500', username: 'cajero', password: '123' },
   { id: 'st-8', name: 'Mesa Cliente (Demo)', role: 'customer', status: 'active', avatarColor: 'bg-pink-500', username: 'cliente', password: '123' },
+  { id: 'st-9', name: 'Karla Recepción', role: 'receptionist', status: 'active', avatarColor: 'bg-indigo-600', username: 'recepcion', password: '123' },
 ];
 
 export const INITIAL_MENU: MenuItem[] = [
