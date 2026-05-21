@@ -10,13 +10,15 @@ interface PersonalViewProps {
   onAddStaffMember: (member: Omit<StaffMember, 'id' | 'avatarColor'>) => void;
   onUpdateStaffMember: (id: string, updated: Partial<StaffMember>) => void;
   onDeleteStaffMember: (id: string) => void;
+  currentUser?: StaffMember | null;
 }
 
 export default function PersonalView({
   staff,
   onAddStaffMember,
   onUpdateStaffMember,
-  onDeleteStaffMember
+  onDeleteStaffMember,
+  currentUser
 }: PersonalViewProps) {
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [name, setName] = useState('');
@@ -24,6 +26,7 @@ export default function PersonalView({
   const [status, setStatus] = useState<StaffStatus>('active');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
+  const [birthday, setBirthday] = useState('05-21');
 
   // Attendance Check-In / Check-Out Log states
   const [attendanceLogs, setAttendanceLogs] = useState<{
@@ -130,7 +133,8 @@ export default function PersonalView({
       role,
       status,
       username: generatedUsername,
-      password: generatedPassword
+      password: generatedPassword,
+      birthday: birthday.trim() || '05-21'
     });
 
     // Reset Form
@@ -139,6 +143,7 @@ export default function PersonalView({
     setStatus('active');
     setUsername('');
     setPassword('');
+    setBirthday('05-21');
     setIsFormOpen(false);
   };
 
@@ -259,6 +264,17 @@ export default function PersonalView({
                   <option value="inactive">🔴 Inactivo / Fuera de servicio</option>
                 </select>
               </div>
+
+              <div>
+                <label className="block text-3xs font-extrabold text-[#605850] uppercase tracking-wider mb-1">Cumpleaños (MM-DD)</label>
+                <input
+                  type="text"
+                  placeholder="Ej. 05-21"
+                  value={birthday}
+                  onChange={e => setBirthday(e.target.value)}
+                  className="w-full text-xs border border-[#E5E0D8] rounded-lg p-2.5 bg-white text-[#2E2A25] focus:outline-none focus:ring-1 focus:ring-[#2E4A3F]"
+                />
+              </div>
             </div>
 
             <div className="flex gap-2 justify-end pt-3 border-t border-[#E5E0D8]">
@@ -346,6 +362,18 @@ export default function PersonalView({
                   <div className="flex justify-between items-center text-xs pt-1.5 border-t border-dashed border-[#E5E0D8]">
                     <span className="text-[#605850] font-extrabold text-3xs uppercase">Estado:</span>
                     {getStatusBadge(member.status)}
+                  </div>
+
+                  <div className="flex justify-between items-center text-xs pt-1.5 border-t border-dashed border-[#E5E0D8]">
+                    <span className="text-[#605850] font-extrabold text-3xs uppercase">Cumpleaños 🎂:</span>
+                    <input
+                      type="text"
+                      placeholder="MM-DD"
+                      value={member.birthday || ''}
+                      title="Editar cumpleaños en formato de mes-dia, ej. 05-21 para activar la notificación"
+                      onChange={e => onUpdateStaffMember(member.id, { birthday: e.target.value })}
+                      className="w-16 text-center font-mono text-3xs font-black bg-[#FAF8F5] border border-[#E5E0D8] rounded py-0.5 px-1 text-[#2E4A3F] focus:outline-none focus:ring-1 focus:ring-[#2E4A3F]"
+                    />
                   </div>
                 </div>
               </div>
@@ -536,22 +564,28 @@ export default function PersonalView({
                 </p>
 
                 {/* Manager actions */}
-                <div className="flex gap-1.5 justify-end">
-                  <button
-                    type="button"
-                    onClick={() => togglePermissionStatus(perm.id, 'aprobado')}
-                    className="px-2 py-0.5 rounded bg-[#EBF2EE] border border-emerald-300 text-[#2E4A3F] text-[9px] font-bold hover:bg-emerald-100 transition cursor-pointer"
-                  >
-                    ✓ Aprobar
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => togglePermissionStatus(perm.id, 'rechazado')}
-                    className="px-2 py-0.5 rounded bg-rose-50 border border-rose-250 text-rose-800 text-[9px] font-bold hover:bg-rose-150 transition cursor-pointer"
-                  >
-                    ✕ Rechazar
-                  </button>
-                </div>
+                {currentUser?.role === 'manager' ? (
+                  <div className="flex gap-1.5 justify-end">
+                    <button
+                      type="button"
+                      onClick={() => togglePermissionStatus(perm.id, 'aprobado')}
+                      className="px-2 py-0.5 rounded bg-[#EBF2EE] border border-emerald-300 text-[#2E4A3F] text-[9px] font-bold hover:bg-emerald-100 transition cursor-pointer"
+                    >
+                      ✓ Aprobar
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => togglePermissionStatus(perm.id, 'rechazado')}
+                      className="px-2 py-0.5 rounded bg-rose-50 border border-rose-250 text-rose-800 text-[9px] font-bold hover:bg-rose-150 transition cursor-pointer"
+                    >
+                      ✕ Rechazar
+                    </button>
+                  </div>
+                ) : (
+                  <p className="text-[10px] text-gray-400 text-right font-semibold italic pb-1">
+                    🔒 Requiere aprobación por un administrador.
+                  </p>
+                )}
               </div>
             ))}
 

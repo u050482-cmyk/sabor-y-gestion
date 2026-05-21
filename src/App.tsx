@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { 
   Utensils, LayoutGrid, Flame, BookOpen, Users, Receipt, 
-  HelpCircle, Sparkles, LogOut, CheckCircle, Clock 
+  HelpCircle, Sparkles, LogOut, CheckCircle, Clock, Calendar, Package
 } from 'lucide-react';
 import { 
   RestaurantTable, MenuItem, StaffMember, Order, Sale, OrderItem, ItemStatus,
@@ -12,11 +12,13 @@ import CocinaView from './components/CocinaView';
 import PlatillosView from './components/PlatillosView';
 import PersonalView from './components/PersonalView';
 import VentasView from './components/VentasView';
+import RecepcionView from './components/RecepcionView';
+import AlmacenView from './components/AlmacenView';
 import LoginView from './components/LoginView';
 import ClientePortalView from './components/ClientePortalView';
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState<'comandas' | 'cocina' | 'platillos' | 'personal' | 'ventas'>('comandas');
+  const [activeTab, setActiveTab] = useState<'comandas' | 'recepcion' | 'cocina' | 'platillos' | 'personal' | 'ventas' | 'almacen'>('comandas');
 
   // Estado de usuario operando el sistema actualmente
   const [currentUser, setCurrentUser] = useState<StaffMember | null>(() => {
@@ -29,8 +31,16 @@ export default function App() {
     if (currentUser) {
       if (currentUser.role === 'waiter') {
         setActiveTab('comandas');
+      } else if (currentUser.role === 'receptionist') {
+        setActiveTab('recepcion');
       } else if (currentUser.role === 'chef') {
         setActiveTab('cocina');
+      } else if (currentUser.role === 'cashier') {
+        setActiveTab('ventas');
+      } else if (currentUser.role === 'warehouse') {
+        setActiveTab('almacen');
+      } else if (currentUser.role === 'manager') {
+        setActiveTab('comandas');
       }
     }
   }, [currentUser]);
@@ -221,6 +231,12 @@ export default function App() {
     ));
   };
 
+  const handleUpdateTableFields = (tableId: string, fields: Partial<RestaurantTable>) => {
+    setTables(prev => prev.map(table => 
+      table.id === tableId ? { ...table, ...fields } : table
+    ));
+  };
+
   const handleUpdateTablePosition = (tableId: string, posX: number, posY: number, section?: RestaurantTable['section']) => {
     setTables(prev => prev.map(table => 
       table.id === tableId 
@@ -355,6 +371,18 @@ export default function App() {
 
   const earningsToday = sales.reduce((sum, s) => sum + s.total, 0);
 
+  // Helper to check birthdays of staff members
+  const getBirthdayNotifications = () => {
+    const todayObj = new Date();
+    const mm = String(todayObj.getMonth() + 1).padStart(2, '0');
+    const dd = String(todayObj.getDate()).padStart(2, '0');
+    const actualMMDD = `${mm}-${dd}`;
+    
+    // We support default May 21st ('05-21') as simulated day so they can see live birthday warnings in mock data
+    const targetMMDD = actualMMDD === '05-21' || !staff.some(s => s.birthday === actualMMDD) ? '05-21' : actualMMDD;
+    return staff.filter(s => s.birthday === targetMMDD && s.id !== 'st-1'); // Exclude admin himself
+  };
+
   if (!currentUser) {
     return <LoginView staff={staff} tables={tables} onLoginSuccess={(user) => setCurrentUser(user)} />;
   }
@@ -421,6 +449,8 @@ export default function App() {
                     {currentUser.role === 'customer' && 'Cliente 🍽️'}
                     {currentUser.role === 'chef' && 'Chef 🧑‍🍳'}
                     {currentUser.role === 'cashier' && 'Cajero 💳'}
+                    {currentUser.role === 'receptionist' && 'Recepcionista 🛋️'}
+                    {currentUser.role === 'warehouse' && 'Almacenista 📦'}
                   </span>
                 </div>
               </div>
@@ -442,84 +472,153 @@ export default function App() {
         </div>
       </nav>
 
+      {/* NOTIFICACIÓN DE CUMPLEAÑOS DE EMPLEADOS PARA EL ADMINISTRADOR */}
+      {currentUser && currentUser.role === 'manager' && (
+        (() => {
+          const birthdayBirths = getBirthdayNotifications();
+          if (birthdayBirths.length === 0) return null;
+          return (
+            <div className="bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-250 rounded-2xl p-4 max-w-7xl mx-auto mt-4 px-5 flex items-center justify-between gap-4 shadow-xs animate-fadeIn shrink-0">
+              <div className="flex items-center gap-3">
+                <span className="text-xl">🎉</span>
+                <div className="space-y-0.5">
+                  <h4 className="text-xxs font-black uppercase text-amber-900 tracking-wider">¡Recordatorio Especial de Cumpleaños!</h4>
+                  <p className="text-xs text-amber-950 font-serif font-black">
+                    Hoy es el cumpleaños de: {birthdayBirths.map((b) => `${b.name} (${b.role === 'waiter' ? 'Mesero' : b.role === 'chef' ? 'Chef' : b.role})`).join(', ')}
+                  </p>
+                  <p className="text-[10px] text-amber-700 font-medium">
+                     Felicítalo en su turno, otórgale descanso anticipado o bríndale un agradecimiento sincero por su gran labor.
+                  </p>
+                </div>
+              </div>
+              <button 
+                onClick={(e) => {
+                  const el = (e.target as HTMLElement).closest('.animate-fadeIn');
+                  if (el) el.classList.add('hidden');
+                }}
+                className="text-xs text-amber-800 bg-amber-100 hover:bg-amber-200 border border-amber-300 font-bold px-3 py-1.5 rounded-lg transition shrink-0 cursor-pointer"
+              >
+                Entendido
+              </button>
+            </div>
+          );
+        })()
+      )}
+
       {/* 2. TAB CONTROLLER LINK BAR */}
       {currentUser.role !== 'customer' && (
         <div className="bg-[#FAF8F5] border-b border-[#E5E0D8] sticky top-0 z-40 shadow-xs">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div className="flex overflow-x-auto gap-2 py-3 scrollbar-none">
               
-              <button
-                onClick={() => setActiveTab('comandas')}
-                id="tab-comandas"
-                className={`px-4 py-2 text-xs font-bold rounded-lg transition-all inline-flex items-center gap-1.5 cursor-pointer ${
-                  activeTab === 'comandas'
-                    ? 'bg-[#2E4A3F] text-white shadow-xs'
-                    : 'bg-[#EFECE6] text-[#605850] hover:bg-[#E5E2DC] hover:text-[#2E2A25]'
-                }`}
-              >
-                <LayoutGrid size={15} />
-                Mesas y Comandas
-              </button>
+              {(currentUser.role === 'manager' || currentUser.role === 'waiter' || currentUser.role === 'receptionist' || currentUser.role === 'cashier') && (
+                <button
+                  onClick={() => setActiveTab('comandas')}
+                  id="tab-comandas"
+                  className={`px-4 py-2 text-xs font-bold rounded-lg transition-all inline-flex items-center gap-1.5 cursor-pointer whitespace-nowrap ${
+                    activeTab === 'comandas'
+                      ? 'bg-[#2E4A3F] text-white shadow-xs'
+                      : 'bg-[#EFECE6] text-[#605850] hover:bg-[#E5E2DC] hover:text-[#2E2A25]'
+                  }`}
+                >
+                  <LayoutGrid size={15} />
+                  Mesas y Comandas
+                </button>
+              )}
 
-              {currentUser.role !== 'waiter' && (
-                <>
-                  <button
-                    onClick={() => setActiveTab('cocina')}
-                    id="tab-cocina"
-                    className={`px-4 py-2 text-xs font-bold rounded-lg transition-all inline-flex items-center gap-1.5 relative cursor-pointer ${
-                      activeTab === 'cocina'
-                        ? 'bg-[#2E4A3F] text-white shadow-xs'
-                        : 'bg-[#EFECE6] text-[#605850] hover:bg-[#E5E2DC] hover:text-[#2E2A25]'
-                    }`}
-                  >
-                    <Flame size={15} />
-                    Estación de Cocina
-                    {cookingItemsCount > 0 && (
-                      <span className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-[#C97A53] text-[#FAF8F5] flex items-center justify-center text-3xs font-bold animate-bounce shadow-md">
-                        {cookingItemsCount}
-                      </span>
-                    )}
-                  </button>
+              {(currentUser.role === 'manager' || currentUser.role === 'receptionist') && (
+                <button
+                  onClick={() => setActiveTab('recepcion')}
+                  id="tab-recepcion"
+                  className={`px-4 py-2 text-xs font-bold rounded-lg transition-all inline-flex items-center gap-1.5 cursor-pointer whitespace-nowrap ${
+                    activeTab === 'recepcion'
+                      ? 'bg-[#2E4A3F] text-white shadow-xs'
+                      : 'bg-[#EFECE6] text-[#605850] hover:bg-[#E5E2DC] hover:text-[#2E2A25]'
+                  }`}
+                >
+                  <Calendar size={15} />
+                  Recepción y Reservas
+                </button>
+              )}
 
-                  <button
-                    onClick={() => setActiveTab('platillos')}
-                    id="tab-platillos"
-                    className={`px-4 py-2 text-xs font-bold rounded-lg transition-all inline-flex items-center gap-1.5 cursor-pointer ${
-                      activeTab === 'platillos'
-                        ? 'bg-[#2E4A3F] text-white shadow-xs'
-                        : 'bg-[#EFECE6] text-[#605850] hover:bg-[#E5E2DC] hover:text-[#2E2A25]'
-                    }`}
-                  >
-                    <BookOpen size={15} />
-                    Menú de Platillos
-                  </button>
+              {(currentUser.role === 'manager' || currentUser.role === 'chef') && (
+                <button
+                  onClick={() => setActiveTab('cocina')}
+                  id="tab-cocina"
+                  className={`px-4 py-2 text-xs font-bold rounded-lg transition-all inline-flex items-center gap-1.5 relative cursor-pointer whitespace-nowrap ${
+                    activeTab === 'cocina'
+                      ? 'bg-[#2E4A3F] text-white shadow-xs'
+                      : 'bg-[#EFECE6] text-[#605850] hover:bg-[#E5E2DC] hover:text-[#2E2A25]'
+                  }`}
+                >
+                  <Flame size={15} />
+                  Estación de Cocina
+                  {cookingItemsCount > 0 && (
+                    <span className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-[#C97A53] text-[#FAF8F5] flex items-center justify-center text-3xs font-bold animate-bounce shadow-md">
+                      {cookingItemsCount}
+                    </span>
+                  )}
+                </button>
+              )}
 
-                  <button
-                    onClick={() => setActiveTab('personal')}
-                    id="tab-personal"
-                    className={`px-4 py-2 text-xs font-bold rounded-lg transition-all inline-flex items-center gap-1.5 cursor-pointer ${
-                      activeTab === 'personal'
-                        ? 'bg-[#2E4A3F] text-white shadow-xs'
-                        : 'bg-[#EFECE6] text-[#605850] hover:bg-[#E5E2DC] hover:text-[#2E2A25]'
-                    }`}
-                  >
-                    <Users size={15} />
-                    Personal de Turno
-                  </button>
+              {(currentUser.role === 'manager' || currentUser.role === 'chef') && (
+                <button
+                  onClick={() => setActiveTab('platillos')}
+                  id="tab-platillos"
+                  className={`px-4 py-2 text-xs font-bold rounded-lg transition-all inline-flex items-center gap-1.5 cursor-pointer whitespace-nowrap ${
+                    activeTab === 'platillos'
+                      ? 'bg-[#2E4A3F] text-white shadow-xs'
+                      : 'bg-[#EFECE6] text-[#605850] hover:bg-[#E5E2DC] hover:text-[#2E2A25]'
+                  }`}
+                >
+                  <BookOpen size={15} />
+                  Menú de Platillos
+                </button>
+              )}
 
-                  <button
-                    onClick={() => setActiveTab('ventas')}
-                    id="tab-ventas"
-                    className={`px-4 py-2 text-xs font-bold rounded-lg transition-all inline-flex items-center gap-1.5 cursor-pointer ${
-                      activeTab === 'ventas'
-                        ? 'bg-[#2E4A3F] text-white shadow-xs'
-                        : 'bg-[#EFECE6] text-[#605850] hover:bg-[#E5E2DC] hover:text-[#2E2A25]'
-                    }`}
-                  >
-                    <Receipt size={15} />
-                    Caja y Ventas
-                  </button>
-                </>
+              {currentUser.role === 'manager' && (
+                <button
+                  onClick={() => setActiveTab('personal')}
+                  id="tab-personal"
+                  className={`px-4 py-2 text-xs font-bold rounded-lg transition-all inline-flex items-center gap-1.5 cursor-pointer whitespace-nowrap ${
+                    activeTab === 'personal'
+                      ? 'bg-[#2E4A3F] text-white shadow-xs'
+                      : 'bg-[#EFECE6] text-[#605850] hover:bg-[#E5E2DC] hover:text-[#2E2A25]'
+                  }`}
+                >
+                  <Users size={15} />
+                  Personal de Turno
+                </button>
+              )}
+
+              {(currentUser.role === 'manager' || currentUser.role === 'cashier') && (
+                <button
+                  onClick={() => setActiveTab('ventas')}
+                  id="tab-ventas"
+                  className={`px-4 py-2 text-xs font-bold rounded-lg transition-all inline-flex items-center gap-1.5 cursor-pointer whitespace-nowrap ${
+                    activeTab === 'ventas'
+                      ? 'bg-[#2E4A3F] text-white shadow-xs'
+                      : 'bg-[#EFECE6] text-[#605850] hover:bg-[#E5E2DC] hover:text-[#2E2A25]'
+                  }`}
+                >
+                  <Receipt size={15} />
+                  Caja y Ventas
+                </button>
+              )}
+
+              {(currentUser.role === 'manager' || currentUser.role === 'warehouse') && (
+                <button
+                  onClick={() => setActiveTab('almacen')}
+                  id="tab-almacen"
+                  className={`px-4 py-2 text-xs font-bold rounded-lg transition-all inline-flex items-center gap-1.5 cursor-pointer whitespace-nowrap ${
+                    activeTab === 'almacen'
+                      ? 'bg-[#2E4A3F] text-white shadow-xs'
+                      : 'bg-[#EFECE6] text-[#605850] hover:bg-[#E5E2DC] hover:text-[#2E2A25]'
+                  }`}
+                >
+                  <Package size={15} />
+                  Almacén e Inventario
+                </button>
               )}
 
             </div>
@@ -577,12 +676,22 @@ export default function App() {
               />
             )}
 
+            {activeTab === 'recepcion' && (
+              <RecepcionView
+                tables={tables}
+                staff={staff}
+                onUpdateTable={handleUpdateTableFields}
+                currentUser={currentUser}
+              />
+            )}
+
             {activeTab === 'personal' && (
               <PersonalView
                 staff={staff}
                 onAddStaffMember={handleAddStaffMember}
                 onUpdateStaffMember={handleUpdateStaffMember}
                 onDeleteStaffMember={handleDeleteStaffMember}
+                currentUser={currentUser}
               />
             )}
 
@@ -590,6 +699,12 @@ export default function App() {
               <VentasView
                 sales={sales}
                 onClearHistory={handleClearSalesHistory}
+              />
+            )}
+
+            {activeTab === 'almacen' && (
+              <AlmacenView
+                currentUser={currentUser}
               />
             )}
           </>

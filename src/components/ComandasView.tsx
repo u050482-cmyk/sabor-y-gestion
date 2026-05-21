@@ -832,20 +832,30 @@ export default function ComandasView({
                   </div>
                   <h4 className="text-sm font-bold font-serif text-[#2E2A25]">Mesa sin comanda activa</h4>
                   <p className="text-xs text-[#605850] max-w-xs mt-2 mb-4">La mesa está vacía en este momento. Abre una nueva comanda para sentar a los clientes.</p>
-                  <button
-                    onClick={() => {
-                      setIsOpeningOrder(true);
-                      setNewCustomerName('');
-                      setCart([]);
-                      if (waiters.length > 0) {
-                        setNewWaiterId(waiters[0].id);
-                      }
-                    }}
-                    id="btn-abrir-comanda"
-                    className="w-full inline-flex items-center justify-center px-4 py-2 text-sm font-semibold text-white bg-[#2E4A3F] rounded-lg hover:bg-[#1E2F25] transition cursor-pointer"
-                  >
-                    <Plus size={16} className="mr-2" /> Abrir Comanda
-                  </button>
+                  
+                  {waiters.length === 0 ? (
+                    <div className="bg-[#FDF3EE] border border-[#ECC8B8] rounded-xl p-3.5 text-left text-xs mb-4">
+                      <p className="text-[#AE593E] font-black uppercase tracking-widest text-[10px] mb-1">⚠️ Servicio bloqueado</p>
+                      <p className="text-[#605850] text-[11px] leading-relaxed">
+                        Para agregar pedidos, deba haber al menos un mesero activo en el restaurante. Registra la entrada de un mesero en la pestaña de <strong>Personal de Turno</strong> para habilitar el servicio de mesas.
+                      </p>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => {
+                        setIsOpeningOrder(true);
+                        setNewCustomerName('');
+                        setCart([]);
+                        if (waiters.length > 0) {
+                          setNewWaiterId(waiters[0].id);
+                        }
+                      }}
+                      id="btn-abrir-comanda"
+                      className="w-full inline-flex items-center justify-center px-4 py-2 text-sm font-semibold text-white bg-[#2E4A3F] rounded-lg hover:bg-[#1E2F25] transition cursor-pointer"
+                    >
+                      <Plus size={16} className="mr-2" /> Abrir Comanda
+                    </button>
+                  )}
                 </div>
               )}
 
@@ -1389,6 +1399,15 @@ export default function ComandasView({
                       <label className="block text-3xs font-extrabold text-[#2F483A] uppercase tracking-widest">
                         Cálculo de Cambio e Ingreso
                       </label>
+
+                      {/* Indicador de Recepción de Dinero por Mesero */}
+                      <div className="bg-white border border-[#CAD9D0]/60 p-2 text-3xs flex items-center gap-2 rounded-lg">
+                        <span className="text-sm">🏃‍♂️</span>
+                        <div>
+                          <span className="text-[#605850] font-bold block text-[9px] uppercase tracking-wider">Mesero que Recibe el Dinero:</span>
+                          <span className="text-xs font-serif font-black text-[#2E4A3F]">{currentWaiter ? currentWaiter.name : 'Mesero General'}</span>
+                        </div>
+                      </div>
                       
                       {/* Cash suggestion buttons */}
                       <div className="flex flex-wrap gap-1.5">

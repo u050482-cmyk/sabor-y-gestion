@@ -1,4 +1,4 @@
-export type StaffRole = 'waiter' | 'chef' | 'cashier' | 'manager' | 'customer' | 'receptionist';
+export type StaffRole = 'waiter' | 'chef' | 'cashier' | 'manager' | 'customer' | 'receptionist' | 'warehouse';
 export type StaffStatus = 'active' | 'break' | 'inactive';
 
 export interface StaffMember {
@@ -9,6 +9,7 @@ export interface StaffMember {
   avatarColor: string;
   username?: string;
   password?: string;
+  birthday?: string; // For birthday notifications: MM-DD
 }
 
 export type MenuCategory = 'entrada' | 'plato_fuerte' | 'postre' | 'bebida';
@@ -81,15 +82,16 @@ export interface Sale {
 
 // Semillas iniciales / Initial mock data
 export const INITIAL_STAFF: StaffMember[] = [
-  { id: 'st-1', name: 'Carlos Mendoza', role: 'manager', status: 'active', avatarColor: 'bg-indigo-500', username: 'admin', password: '123' },
-  { id: 'st-2', name: 'Sofía Rodríguez', role: 'waiter', status: 'active', avatarColor: 'bg-emerald-500', username: 'sofia', password: '123' },
-  { id: 'st-3', name: 'Mateo Guerrero', role: 'waiter', status: 'active', avatarColor: 'bg-teal-500', username: 'mateo', password: '123' },
-  { id: 'st-4', name: 'Laura Gómez', role: 'waiter', status: 'break', avatarColor: 'bg-cyan-500', username: 'laura', password: '123' },
-  { id: 'st-5', name: 'Chef Alejandro', role: 'chef', status: 'active', avatarColor: 'bg-amber-500', username: 'chef1', password: '123' },
-  { id: 'st-6', name: 'Chef Valentina', role: 'chef', status: 'active', avatarColor: 'bg-rose-500', username: 'chef2', password: '123' },
-  { id: 'st-7', name: 'Andrés López', role: 'cashier', status: 'active', avatarColor: 'bg-purple-500', username: 'cajero', password: '123' },
-  { id: 'st-8', name: 'Mesa Cliente (Demo)', role: 'customer', status: 'active', avatarColor: 'bg-pink-500', username: 'cliente', password: '123' },
-  { id: 'st-9', name: 'Karla Recepción', role: 'receptionist', status: 'active', avatarColor: 'bg-indigo-600', username: 'recepcion', password: '123' },
+  { id: 'st-1', name: 'Carlos Mendoza', role: 'manager', status: 'active', avatarColor: 'bg-indigo-500', username: 'admin', password: '123', birthday: '11-02' },
+  { id: 'st-2', name: 'Sofía Rodríguez', role: 'waiter', status: 'active', avatarColor: 'bg-emerald-500', username: 'sofia', password: '123', birthday: '05-21' }, // Birthday TODAY (May 21st)!
+  { id: 'st-3', name: 'Mateo Guerrero', role: 'waiter', status: 'active', avatarColor: 'bg-teal-500', username: 'mateo', password: '123', birthday: '05-24' },
+  { id: 'st-4', name: 'Laura Gómez', role: 'waiter', status: 'break', avatarColor: 'bg-cyan-500', username: 'laura', password: '123', birthday: '03-12' },
+  { id: 'st-5', name: 'Chef Alejandro', role: 'chef', status: 'active', avatarColor: 'bg-amber-500', username: 'chef1', password: '123', birthday: '12-25' },
+  { id: 'st-6', name: 'Chef Valentina', role: 'chef', status: 'active', avatarColor: 'bg-rose-500', username: 'chef2', password: '123', birthday: '05-21' }, // Birthday TODAY (May 21st)!
+  { id: 'st-7', name: 'Andrés López', role: 'cashier', status: 'active', avatarColor: 'bg-purple-500', username: 'cajero', password: '123', birthday: '09-30' },
+  { id: 'st-8', name: 'Mesa Cliente (Demo)', role: 'customer', status: 'active', avatarColor: 'bg-pink-500', username: 'cliente', password: '123', birthday: '07-04' },
+  { id: 'st-9', name: 'Karla Recepción', role: 'receptionist', status: 'active', avatarColor: 'bg-indigo-600', username: 'recepcion', password: '123', birthday: '05-20' },
+  { id: 'st-10', name: 'Alfonso Almacén', role: 'warehouse', status: 'active', avatarColor: 'bg-stone-500', username: 'almacen', password: '123', birthday: '08-15' },
 ];
 
 export const INITIAL_MENU: MenuItem[] = [

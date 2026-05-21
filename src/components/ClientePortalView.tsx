@@ -240,6 +240,12 @@ export default function ClientePortalView({
   };
 
   const handleSendCartOrder = () => {
+    const activeWaiters = staff.filter(s => s.role === 'waiter' && s.status === 'active');
+    if (activeWaiters.length === 0) {
+      showToast(`⚠️ No se puede enviar el pedido: Se requiere al menos un mesero activo de turno en el restaurante para procesarlo.`);
+      return;
+    }
+
     const cartItems = Object.keys(cart).map(itemId => {
       const data = cart[itemId];
       return {
@@ -257,9 +263,7 @@ export default function ClientePortalView({
       showToast(`🔥 ¡Adiciones enviadas! Tus platillos ya están en la fila de los Chefs.`);
     } else {
       // This is a brand new order for the table! Find first active waiter in staff list dynamically
-      const activeWaiterMatch = staff.find(s => s.role === 'waiter' && s.status === 'active') || 
-                                staff.find(s => s.role === 'waiter') || 
-                                staff[1];
+      const activeWaiterMatch = activeWaiters[0] || staff.find(s => s.role === 'waiter') || staff[1];
       const targetWaiterId = activeWaiterMatch ? activeWaiterMatch.id : 'st-2';
 
       onOpenOrder(sessionTableId, `${currentUser.name} (Auto)`, targetWaiterId, cartItems);
